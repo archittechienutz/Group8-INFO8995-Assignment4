@@ -1,0 +1,33 @@
+---
+- name: Remove Jenkins Helm release
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    jenkins_release_name: jenkins
+    jenkins_namespace: jenkins
+
+  tasks:
+    - name: Uninstall Jenkins helm release
+      kubernetes.core.helm:
+        name: "{{ jenkins_release_name }}"
+        release_namespace: "{{ jenkins_namespace }}"
+        state: absent
+        wait: true
+        purge: true
+
+    - name: Optionally uninstall Traefik (if you installed it with up.yaml)
+      kubernetes.core.helm:
+        name: traefik
+        release_namespace: kube-system
+        state: absent
+        wait: true
+      when: install_traefik is not defined or install_traefik | default(true)
+
+    - name: Delete jenkins namespace (if empty)
+      kubernetes.core.k8s:
+        state: absent
+        kind: Namespace
+        api_version: v1
+        name: "{{ jenkins_namespace }}"

@@ -1,0 +1,34 @@
+redis-cluster:
+  enabled: false
+redis:
+  enabled: false
+postgresql:
+  enabled: false
+postgresql-ha:
+  enabled: false
+
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClass: standard
+
+gitea:
+  admin:
+    username: gitea_admin
+    password: admin123
+    email: admin@example.com
+
+  config:
+    database:
+      DB_TYPE: mysql
+      HOST: mysql.default.svc.cluster.local:3306
+      NAME: gitea_db
+      USER: gitea
+      PASSWD: gitea123
+
+    session:
+      PROVIDER: db
+    cache:
+      ADAPTER: db
+    queue:
+      TYPE: persistable-channel

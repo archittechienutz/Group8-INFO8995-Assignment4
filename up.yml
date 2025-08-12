@@ -1,0 +1,46 @@
+---
+- name: Deploy Jenkins with Helm
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    jenkins_release_name: jenkins
+    jenkins_namespace: jenkins
+    jenkins_values_file: "{{ playbook_dir }}/jenkins-values.yaml"
+
+  tasks:
+    - name: Ensure Jenkins Helm repo is present
+      kubernetes.core.helm_repository:
+        name: jenkins
+        repo_url: https://charts.jenkins.io
+      register: add_jenkins_repo
+
+    - name: Ensure Traefik Helm repo is present (if you need Traefik)
+      kubernetes.core.helm_repository:
+        name: traefik
+        repo_url: https://traefik.github.io/charts
+
+    # Optional: install traefik if you don't already have an ingress controller.
+    # Remove or set `install_traefik: false` if Traefik is already in cluster.
+    - name: Install Traefik (optional - skip if already installed)
+      kubernetes.core.helm:
+        name: traefik
+        chart_ref: traefik/traefik
+        release_namespace: kube-system
+        create_namespace: false
+        update_repo_cache: true
+        wait: true
+      when: install_traefik is not defined or install_traefik | default(true)
+
+    - name: Install Jenkins via Helm
+      kubernetes.core.helm:
+        name: "{{ jenkins_release_name }}"
+        chart_ref: jenkins/jenkins
+        release_namespace: "{{ jenkins_namespace }}"
+        create_namespace: true
+        values_files:
+          - "{{ jenkins_values_file }}"
+        update_repo_cache: true
+        wait: true
+        timeout: 600s
