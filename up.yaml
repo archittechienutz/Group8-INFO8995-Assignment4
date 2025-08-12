@@ -1,7 +1,0 @@
----
-- hosts: localhost
-  tasks:
-  - name: "Install kubernetes python package"
-    pip:
-      name: kubernetes
-      state: present
