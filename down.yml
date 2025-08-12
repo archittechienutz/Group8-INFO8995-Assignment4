@@ -1,33 +1,53 @@
----
-- name: Remove Jenkins Helm release
+# down.yaml
+- name: Remove Jenkins from k8s
   hosts: localhost
-  connection: local
   gather_facts: false
 
   vars:
-    jenkins_release_name: jenkins
-    jenkins_namespace: jenkins
+    kubeconfig: "{{ lookup('env','KUBECONFIG') | default('~/.kube/config', true) }}"
+    ns: jenkins
 
   tasks:
-    - name: Uninstall Jenkins helm release
-      kubernetes.core.helm:
-        name: "{{ jenkins_release_name }}"
-        release_namespace: "{{ jenkins_namespace }}"
-        state: absent
-        wait: true
-        purge: true
-
-    - name: Optionally uninstall Traefik (if you installed it with up.yaml)
-      kubernetes.core.helm:
-        name: traefik
-        release_namespace: kube-system
-        state: absent
-        wait: true
-      when: install_traefik is not defined or install_traefik | default(true)
-
-    - name: Delete jenkins namespace (if empty)
+    - name: Delete Ingress (if present)
       kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig }}"
         state: absent
-        kind: Namespace
+        api_version: networking.k8s.io/v1
+        kind: Ingress
+        namespace: "{{ ns }}"
+        name: jenkins
+
+    - name: Delete JNLP service
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig }}"
+        state: absent
         api_version: v1
-        name: "{{ jenkins_namespace }}"
+        kind: Service
+        namespace: "{{ ns }}"
+        name: jenkins-jnlp
+
+    - name: Delete UI service
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig }}"
+        state: absent
+        api_version: v1
+        kind: Service
+        namespace: "{{ ns }}"
+        name: jenkins
+
+    - name: Delete Deployment
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig }}"
+        state: absent
+        api_version: apps/v1
+        kind: Deployment
+        namespace: "{{ ns }}"
+        name: jenkins
+
+    - name: Delete Namespace
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig }}"
+        state: absent
+        api_version: v1
+        kind: Namespace
+        name: "{{ ns }}"
