@@ -1,3 +1,5 @@
 [submodule "k8s"]
 	path = k8s
 	url = https://github.com/rhildred/ansible-k8s
+[submodule "INFO8995-Assignment3"]
+	url = git@github.com:archittechienutz/INFO8995-Assignment3.git
