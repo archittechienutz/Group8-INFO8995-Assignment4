@@ -1,142 +1,104 @@
-# Gitea Kubernetes Deployment with MySQL and ngrok
-
-This project deploys Gitea (a Git hosting service) on a Kubernetes cluster using Helm, with MySQL as the external database. It includes instructions for exposing Gitea publicly using ngrok.
-
----
-
+## Jenkins CI/CD on Kubernetes with GitHub, Gitea, and ngrok
+## Overview
+## This project demonstrates how to install Jenkins on a Kubernetes cluster using Ansible and Helm, configure Jenkins pipelines integrated with GitHub and Gitea repositories, and expose Jenkins UI using ngrok or Traefik with Cloudflare ingress.
 ## Prerequisites
-
-- Kubernetes cluster (e.g., Minikube, Codespaces Kubernetes)
-- `kubectl` installed and configured
-- `helm` installed
-- `ngrok` installed (for public exposure)
-- MySQL Helm chart installed via Bitnami
-- Access to your Kubernetes cluster (e.g., `kubectl` configured to use the correct context)
-
----
-
-## Step 1: Install MySQL on Kubernetes
-
-1. Create a `mysql-values.yaml` file with the following content:
-
-```yaml
-auth:
-  rootPassword: admin123
-  username: gitea
-  password: gitea123
-  database: gitea_db
-
-primary:
-  service:
-    type: ClusterIP
-
-
-## ✅ Dev Environment (Codespaces)
+- Kubernetes cluster up and running (Minikube, k3s, or vSphere VMs)
+- `kubectl` configured and connected to your cluster
+- `helm` installed and configured
+- `ansible` installed with `kubernetes.core` collection
+- Access to GitHub and Gitea accounts
+- ngrok account (for exposing Jenkins UI)
+- Azure CLI and Azure Function Core Tools (if deploying Azure Functions)
+Setup Steps
+##1. Kubernetes cluster verification
+Check Kubernetes is accessible:
 
 ```bash
-pip install ansible kubernetes
-ansible-playbook gitea/up.yml
+kubectl get nodes
+```
 
-2. Add Bitnami Helm repo and install MySQL:
-helm repo add bitnami https://charts.bitnami.com/bitnami
-helm repo update
-helm install mysql bitnami/mysql -f mysql-values.yaml
+If you see connection errors, ensure your cluster is running and kubeconfig is properly set.
+## 2. Install Jenkins on Kubernetes
+Edit `jenkins-values.yaml` to configure Jenkins admin credentials:
 
-If you want to run the Kubernetes cluster locally, you can use Minikube:
-
-Start Minikube:
-minikube start
-
-Make sure your kubectl context is set to minikube:
-kubectl config use-context minikube
-kubectl cluster-info
-
-Step 2: Update Gitea Helm values.yaml
-Ensure your gitea/values.yaml file includes:
-redis-cluster:
-  enabled: false
-redis:
-  enabled: false
-postgresql:
-  enabled: false
-postgresql-ha:
-  enabled: false
-
-persistence:
-  enabled: true
-  size: 5Gi
-  storageClass: standard
-
-gitea:
+```yaml
+controller:
   admin:
-    username: gitea_admin
+    username: admin
     password: admin123
-    email: admin@example.com
+```
 
-  config:
-    database:
-      DB_TYPE: mysql
-      HOST: mysql.default.svc.cluster.local:3306
-      NAME: gitea_db
-      USER: gitea
-      PASSWD: gitea123
+Run Ansible playbook to install Jenkins and Traefik (optional):
 
-    session:
-      PROVIDER: db
-    cache:
-      ADAPTER: db
-    queue:
-      TYPE: persistable-channel
+```bash
+ansible-playbook up.yml
+```
 
-Step 3: Deploy Gitea Helm Chart Using Kubernetes Job
-Apply your RBAC and service account YAML files:
-kubectl apply -f k8s/gitea-rbac.yaml
+To uninstall Jenkins:
 
-Deploy Gitea using your Helm job manifest:
-kubectl apply -f k8s/prod-up.yaml
+```bash
+ansible-playbook down.yml
+```
+## 3. Expose Jenkins
+Using ngrok
+- Install ngrok:
 
-Monitor the job:
-kubectl get jobs
-kubectl logs -f job/gitea-prod-install
+```bash
+npm install -g ngrok
+```
 
-Step 4: Access Gitea Locally
-Port forward Gitea HTTP service:
-kubectl port-forward svc/gitea-http 3000:3000
+- Authenticate with your ngrok authtoken:
 
-Step 5: Expose Gitea Publicly Using ngrok
-1. Install ngrok (if not already installed):
-# For GitHub Codespaces:
-wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
-tar -xvzf ngrok-v3-stable-linux-amd64.tgz
-sudo mv ngrok /usr/local/bin/
-chmod +x /usr/local/bin/ngrok
+```bash
+ngrok config add-authtoken YOUR_NGROK_AUTH_TOKEN
+```
 
-2. Add your ngrok auth token:
-ngrok config add-authtoken <your_ngrok_auth_token>
+- Start tunnel to Jenkins service port (e.g., 8080):
 
-3. Start ngrok tunnel to your local port 3000 (run this in a new terminal window):
-ngrok http 3000
+```bash
+kubectl port-forward svc/jenkins 8080:8080
+ngrok http 8080
+```
 
-4. Copy the public URL from the ngrok output (e.g., https://abc123.ngrok-free.app) and open it in any browser to access Gitea publicly.
+Copy the forwarding URL from ngrok to access Jenkins UI externally.
+Using Traefik and Cloudflare Ingress
+- Configure Traefik ingress controller in your cluster.
+- Create an Ingress resource for Jenkins.
+- Set Cloudflare DNS to point to your Traefik ingress IP.
+## 4. Jenkins Pipeline Setup with GitHub
+- Fork the GitHub repo containing the Jenkinsfile.
+- In Jenkins UI, create a new Pipeline project.
+- Set SCM to Git and provide your repo URL.
+- Configure credentials if needed.
+- Enable webhook in GitHub to trigger builds on push.
+## 5. Jenkins Pipeline Setup with Gitea
+- Fork or create a repo in your Gitea server with the Jenkinsfile.
+- Create a Jenkins Pipeline project pointing to the Gitea repo.
+- Configure Jenkins Gitea plugin for webhooks.
+- Use your cluster IP or exposed Jenkins URL to receive webhook events.
+##6. Deploying Azure Functions (Optional)
+- Edit Jenkinsfile to include Azure CLI commands for deployment.
+- Ensure Azure Service Principal credentials are stored in Jenkins.
+- The Jenkins pipeline stages typically include:
 
+  - Build: `npm install` and `func start`
+  - Test: run tests if any
+  - Deploy: `func azure functionapp publish <app-name> --force`
 Troubleshooting
-1. If the Gitea Helm job fails with permission errors, ensure your service account has proper RBAC permissions for resources like deployments, statefulsets, services, persistentvolumeclaims, networkpolicies, etc.
+- `kubectl` connection refused → Check your kubeconfig and cluster status.
+- Helm install errors about `controller.adminUser` → Update `jenkins-values.yaml` keys to `controller.admin.username` and `controller.admin.password`.
+- Helm secret errors → Ensure `existingSecret` is removed or properly created.
+- ngrok `command not found` → Install ngrok and authenticate.
+- ngrok auth token errors → Use the correct token from your ngrok dashboard (not `cr_` prefixed API tokens).
+## References
+- Jenkins Helm Chart: https://charts.jenkins.io/
+- Ansible Kubernetes Collection: https://docs.ansible.com/ansible/latest/collections/kubernetes/core/
+- ngrok Documentation: https://ngrok.com/docs
+- Kubernetes Documentation: https://kubernetes.io/docs/
+- Azure Functions Core Tools: https://learn.microsoft.com/en-us/azure/azure-functions/functions-core-tools
+Submission
+Please submit links to:
 
-2. Use kubectl describe job gitea-prod-install and kubectl logs -f job/gitea-prod-install to diagnose issues.
-
-3. Ensure your Kubernetes context is set to the right cluster (e.g., minikube).
-
-
-Cleanup
-To remove all deployed resources:
-kubectl delete job gitea-prod-install
-helm uninstall gitea
-helm uninstall mysql
-kubectl delete -f k8s/gitea-rbac.yaml
-
-References
-Gitea Helm Charts
-
-Bitnami MySQL Helm Chart
-
-ngrok Documentation
+1. This repository containing `up.yml` and `down.yml`
+2. Your GitHub repository with Jenkinsfile and pipeline setup
+3. Your Gitea repository with Jenkinsfile and pipeline setup
